@@ -54,8 +54,28 @@ function auth(req, res, next) {
   const token = raw.startsWith('Bearer ') ? raw.slice(7) : raw
   const payload = verify(token)
   if (!payload) return res.status(401).json({ ok: false, error: '登录过期，请重新登录' })
-  req.admin = payload
+  req.auth = payload
   next()
+}
+
+function authAdmin(req, res, next) {
+  auth(req, res, () => {
+    if (!req.auth || req.auth.role !== 'admin') {
+      return res.status(403).json({ ok: false, error: '需要管理员权限' })
+    }
+    req.admin = req.auth
+    next()
+  })
+}
+
+function authUser(req, res, next) {
+  auth(req, res, () => {
+    if (!req.auth || req.auth.role !== 'user') {
+      return res.status(401).json({ ok: false, error: '请先登录' })
+    }
+    req.user = req.auth
+    next()
+  })
 }
 
 // 登录失败限速：同一 IP 10 分钟内最多 8 次
@@ -110,6 +130,67 @@ app.get('/api/config', async (req, res) => {
   }
 })
 
+// ---------- 用户登录（微信 code 换 openid） ----------
+
+const WX_APPID = process.env.WX_APPID || 'wxf284831838d69924'
+const WX_SECRET = process.env.WX_SECRET || ''
+const USER_TOKEN_TTL = 30 * 24 * 60 * 60 * 1000
+
+async function jscode2session(code) {
+  const url =
+    'https://api.weixin.qq.com/sns/jscode2session' +
+    '?appid=' + encodeURIComponent(WX_APPID) +
+    '&secret=' + encodeURIComponent(WX_SECRET) +
+    '&js_code=' + encodeURIComponent(code) +
+    '&grant_type=authorization_code'
+
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) })
+  const data = await res.json()
+  if (data.errcode) throw new Error('微信登录失败：' + (data.errmsg || data.errcode))
+  if (!data.openid) throw new Error('微信没返回 openid')
+  return data
+}
+
+app.post('/api/auth/login', async (req, res) => {
+  const code = String((req.body && req.body.code) || '').trim()
+  const nick = String((req.body && req.body.nick) || '').trim().slice(0, 64)
+  const avatar = String((req.body && req.body.avatar) || '').slice(0, 255)
+
+  if (!code) return res.status(400).json({ ok: false, error: '缺少登录凭证' })
+  if (!WX_SECRET) {
+    return res.status(503).json({ ok: false, error: '服务端还没配置 WX_SECRET，登录暂不可用' })
+  }
+
+  try {
+    const s = await jscode2session(code)
+    const user = await db.upsertUser(s.openid, nick, avatar)
+    if (!user || user.status !== 1) {
+      return res.status(403).json({ ok: false, error: '账号已被禁用' })
+    }
+
+    const exp = Date.now() + USER_TOKEN_TTL
+    res.json({
+      ok: true,
+      token: sign({ role: 'user', oid: s.openid, exp }),
+      exp,
+      user
+    })
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message || '微信登录失败' })
+  }
+})
+
+app.get('/api/auth/me', authUser, async (req, res) => {
+  try {
+    const user = await db.getUser(req.user.oid)
+    if (!user) return res.status(404).json({ ok: false, error: '用户不存在' })
+    if (user.status !== 1) return res.status(403).json({ ok: false, error: '账号已被禁用' })
+    res.json({ ok: true, user })
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
+
 // ---------- 管理端 ----------
 
 app.post('/api/admin/login', async (req, res) => {
@@ -127,10 +208,10 @@ app.post('/api/admin/login', async (req, res) => {
 
   fails.delete(throttleKey(req))
   const exp = Date.now() + TOKEN_TTL
-  res.json({ ok: true, token: sign({ u, exp }), exp })
+  res.json({ ok: true, token: sign({ role: 'admin', u, exp }), exp })
 })
 
-app.get('/api/admin/overview', auth, async (req, res) => {
+app.get('/api/admin/overview', authAdmin, async (req, res) => {
   try {
     const [services, version, notice] = await Promise.all([
       db.listServices(),
@@ -143,7 +224,7 @@ app.get('/api/admin/overview', auth, async (req, res) => {
   }
 })
 
-app.post('/api/admin/service', auth, async (req, res) => {
+app.post('/api/admin/service', authAdmin, async (req, res) => {
   const s = req.body && req.body.service
   if (!s || !String(s.id || '').trim() || !String(s.name || '').trim()) {
     return res.status(400).json({ ok: false, error: 'id 和名称不能为空' })
@@ -157,7 +238,7 @@ app.post('/api/admin/service', auth, async (req, res) => {
   }
 })
 
-app.delete('/api/admin/service/:id', auth, async (req, res) => {
+app.delete('/api/admin/service/:id', authAdmin, async (req, res) => {
   try {
     const removed = await db.deleteService(String(req.params.id))
     const version = await db.bumpVersion()
@@ -167,7 +248,7 @@ app.delete('/api/admin/service/:id', auth, async (req, res) => {
   }
 })
 
-app.post('/api/admin/notice', auth, async (req, res) => {
+app.post('/api/admin/notice', authAdmin, async (req, res) => {
   const notice = String((req.body && req.body.notice) || '').slice(0, 2000)
   try {
     await db.setSetting('notice', notice)
@@ -179,7 +260,7 @@ app.post('/api/admin/notice', auth, async (req, res) => {
 })
 
 // 导出成小程序本地兜底用的 services.js
-app.get('/api/admin/export', auth, async (req, res) => {
+app.get('/api/admin/export', authAdmin, async (req, res) => {
   const services = await db.listServices()
   const body = services.map((s) => '  ' + JSON.stringify({
     id: s.id, name: s.name, cat: s.cat, summary: s.summary,
@@ -193,6 +274,28 @@ app.get('/api/admin/export', auth, async (req, res) => {
     '/** 由云托管后台导出，替换 data/services.js 里的 SERVICES 即可 */\n' +
     'const SERVICES = [\n' + body + '\n]\n\nmodule.exports = { SERVICES }\n'
   )
+})
+
+// 后台：用户列表与禁用
+app.get('/api/admin/users', authAdmin, async (req, res) => {
+  try {
+    const users = await db.listUsers(200)
+    res.json({ ok: true, users })
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
+
+app.post('/api/admin/user/:openid/status', authAdmin, async (req, res) => {
+  const openid = String(req.params.openid || '')
+  const status = Number(req.body && req.body.status) === 1 ? 1 : 0
+  if (!openid) return res.status(400).json({ ok: false, error: '缺少 openid' })
+  try {
+    const updated = await db.setUserStatus(openid, status)
+    res.json({ ok: true, updated, status })
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message })
+  }
 })
 
 // ---------- 后台页面 ----------

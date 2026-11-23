@@ -165,6 +165,21 @@
       </div>
     </div>
 
+    <div class="panel">
+      <div style="display:flex;align-items:center;margin-bottom:12px">
+        <h2 style="margin:0">登录用户 <span class="badge" id="userCount">0</span></h2>
+      </div>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr><th>昵称</th><th>openid</th><th>状态</th><th>最后登录</th><th>操作</th></tr>
+          </thead>
+          <tbody id="userBody"></tbody>
+        </table>
+      </div>
+      <div class="hint" id="userEmpty" style="padding:6px 0">还没有用户登录过。小程序端登录后，这里会出现打卡记录。</div>
+    </div>
+
     <div class="hint" style="text-align:center">
       所有改动保存后自动生效，小程序下次打开即拉到最新数据。收藏靠 id，改 id 会让老收藏失效。
     </div>
@@ -226,7 +241,7 @@
 <script>
 (function () {
   var TOKEN_KEY = 'campus_admin_token';
-  var state = { token: '', services: [], version: 1, editing: null };
+  var state = { token: '', services: [], users: [], version: 1, editing: null };
 
   function $(id) { return document.getElementById(id); }
 
@@ -301,7 +316,64 @@
       $('countBadge').textContent = state.services.length;
       $('noticeInput').value = d.notice || '';
       renderTable();
+      loadUsers();
     }).catch(function (e) { toast(e.message); });
+  }
+
+  function loadUsers() {
+    return api('/api/admin/users').then(function (d) {
+      state.users = d.users || [];
+      $('userCount').textContent = state.users.length;
+      renderUsers();
+    }).catch(function () {});
+  }
+
+  function renderUsers() {
+    var tb = $('userBody');
+    if (!tb) return;
+    tb.innerHTML = '';
+    var list = state.users || [];
+    $('userEmpty').style.display = list.length ? 'none' : 'block';
+
+    list.forEach(function (u) {
+      var tr = document.createElement('tr');
+
+      var td1 = document.createElement('td');
+      td1.className = 'name';
+      td1.textContent = u.nick || '(未命名)';
+
+      var td2 = document.createElement('td');
+      td2.textContent = u.openid && u.openid.length > 12
+        ? u.openid.slice(0, 6) + '…' + u.openid.slice(-4)
+        : (u.openid || '');
+
+      var td3 = document.createElement('td');
+      td3.textContent = u.status === 1 ? '正常' : '已禁用';
+      if (u.status !== 1) td3.style.color = 'var(--danger)';
+
+      var td4 = document.createElement('td');
+      td4.textContent = u.lastLogin ? String(u.lastLogin).replace('T', ' ').slice(0, 16) : '—';
+
+      var td5 = document.createElement('td');
+      td5.className = 'ops';
+      var b = document.createElement('button');
+      b.textContent = u.status === 1 ? '禁用' : '启用';
+      if (u.status === 1) b.className = 'danger';
+      b.onclick = function () { toggleUser(u.openid, u.status === 1 ? 0 : 1); };
+      td5.appendChild(b);
+
+      [td1, td2, td3, td4, td5].forEach(function (td) { tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+  }
+
+  function toggleUser(openid, status) {
+    api('/api/admin/user/' + encodeURIComponent(openid) + '/status', {
+      method: 'POST',
+      body: { status: status }
+    })
+      .then(function () { toast(status ? '已启用' : '已禁用'); return loadUsers(); })
+      .catch(function (e) { toast(e.message); });
   }
 
   function renderTable() {
@@ -464,15 +536,8 @@
   var saved = localStorage.getItem(TOKEN_KEY);
   if (saved) {
     state.token = saved;
-    api('/api/admin/overview').then(function (d) {
-      showMain();
-      state.services = d.services || [];
-      state.version = d.version || 1;
-      $('versionBadge').textContent = 'v' + state.version;
-      $('countBadge').textContent = state.services.length;
-      $('noticeInput').value = d.notice || '';
-      renderTable();
-    }).catch(function () { showLogin(); });
+    showMain();
+    load();
   } else {
     showLogin();
   }

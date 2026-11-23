@@ -8,11 +8,15 @@
 |---|---|---|
 | `GET /api/config` | 小程序 | 下发全部服务条目、公告、数据版本号 |
 | `GET /api/health` | 运维 | 存活与数据库连通性 |
+| `POST /api/auth/login` | 小程序 | `wx.login` 的 code 换 openid，注册/更新用户，发 token（30 天） |
+| `GET /api/auth/me` | 小程序 | 用 token 换当前用户信息 |
 | `POST /api/admin/login` | 后台网页 | 账号密码换 token（12 小时） |
 | `GET /api/admin/overview` | 后台网页 | 服务列表 + 公告 |
 | `POST /api/admin/service` | 后台网页 | 新增 / 修改一条服务 |
 | `DELETE /api/admin/service/:id` | 后台网页 | 删除一条服务 |
 | `POST /api/admin/notice` | 后台网页 | 保存首页公告 |
+| `GET /api/admin/users` | 后台网页 | 登录用户列表（最近 200 个） |
+| `POST /api/admin/user/:openid/status` | 后台网页 | 禁用 / 启用账号 |
 | `GET /api/admin/export` | 后台网页 | 导出成小程序本地兜底用的 `services.js` |
 
 管理后台页面：`/admin`
@@ -28,6 +32,10 @@
 | `ADMIN_USER` | `admin` | 后台账号 |
 | `ADMIN_PASS` | `campus2026` | **务必改掉** |
 | `ADMIN_SECRET` | 由密码派生 | 可选，用于签发 token |
+| `WX_APPID` | `wxf284831838d69924` | 小程序 AppID |
+| `WX_SECRET` | 空 | **必须配**，小程序 AppSecret；不配则 `/api/auth/login` 返回 503 |
+
+`WX_SECRET` 在微信公众平台 → 开发 → 开发管理 → 开发设置 → AppSecret 里拿（只能重置，不能查看明文）。
 
 ## 第一次启动
 

@@ -62,6 +62,15 @@ const DDL = [
   `CREATE TABLE IF NOT EXISTS settings (
     k VARCHAR(64) NOT NULL PRIMARY KEY,
     v MEDIUMTEXT
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+  `CREATE TABLE IF NOT EXISTS users (
+    openid VARCHAR(64) NOT NULL PRIMARY KEY,
+    nick VARCHAR(64) NOT NULL DEFAULT '',
+    avatar VARCHAR(255) NOT NULL DEFAULT '',
+    status TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_login DATETIME NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 ]
 
@@ -219,6 +228,58 @@ async function init(seed) {
   return seedIfEmpty(seed)
 }
 
+// ---------- 用户 ----------
+
+function fromUserRow(r) {
+  return {
+    openid: r.openid,
+    nick: r.nick,
+    avatar: r.avatar,
+    status: Number(r.status),
+    createdAt: r.created_at,
+    lastLogin: r.last_login
+  }
+}
+
+async function upsertUser(openid, nick, avatar) {
+  const db = getPool()
+  await db.query(
+    `INSERT INTO users (openid, nick, avatar, status, last_login)
+     VALUES (?, ?, ?, 1, NOW())
+     ON DUPLICATE KEY UPDATE
+       nick = IF(VALUES(nick) = '', nick, VALUES(nick)),
+       avatar = IF(VALUES(avatar) = '', avatar, VALUES(avatar)),
+       last_login = NOW()`,
+    [openid, String(nick || '').slice(0, 64), String(avatar || '').slice(0, 255)]
+  )
+  return getUser(openid)
+}
+
+async function getUser(openid) {
+  const db = getPool()
+  const [rows] = await db.query('SELECT * FROM users WHERE openid = ? LIMIT 1', [openid])
+  return rows[0] ? fromUserRow(rows[0]) : null
+}
+
+async function listUsers(limit) {
+  const db = getPool()
+  const n = Math.min(Math.max(Number(limit) || 200, 1), 1000)
+  const [rows] = await db.query(
+    'SELECT * FROM users ORDER BY last_login DESC, created_at DESC LIMIT ?',
+    [n]
+  )
+  return rows.map(fromUserRow)
+}
+
+async function setUserStatus(openid, status) {
+  const db = getPool()
+  const [res] = await db.query('UPDATE users SET status = ? WHERE openid = ?', [
+    status ? 1 : 0,
+    openid
+  ])
+  return res.affectedRows > 0
+}
+
 module.exports = {
   init,
   getPool,
@@ -228,5 +289,9 @@ module.exports = {
   getSetting,
   setSetting,
   bumpVersion,
-  fromRow
+  fromRow,
+  upsertUser,
+  getUser,
+  listUsers,
+  setUserStatus
 }
