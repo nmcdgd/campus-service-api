@@ -8,6 +8,7 @@ const express = require('express')
 
 const db = require('./db')
 const seed = require('./seed.json')
+const foodSeed = require('./food-seed.json')
 
 const PORT = Number(process.env.PORT) || 80
 const ADMIN_USER = process.env.ADMIN_USER || 'admin'
@@ -191,6 +192,79 @@ app.get('/api/auth/me', authUser, async (req, res) => {
   }
 })
 
+// ---------- 美食榜 ----------
+
+// 带了用户 token 就顺便判断「我点没点过赞」，没带也能看
+function optionalUser(req, res, next) {
+  const raw = String(req.headers.authorization || '')
+  const token = raw.startsWith('Bearer ') ? raw.slice(7) : raw
+  const payload = verify(token)
+  if (payload && payload.role === 'user') req.user = payload
+  next()
+}
+
+app.get('/api/food/list', optionalUser, async (req, res) => {
+  try {
+    const shops = await db.listShops(req.user && req.user.oid)
+    res.set('Cache-Control', 'no-store')
+    res.json({ ok: true, shops })
+  } catch (e) {
+    res.status(500).json({ ok: false, error: '读取失败' })
+  }
+})
+
+app.get('/api/food/:id', optionalUser, async (req, res) => {
+  try {
+    const shop = await db.getShopDetail(String(req.params.id), req.user && req.user.oid)
+    if (!shop) return res.status(404).json({ ok: false, error: '这家店还没收录' })
+    res.set('Cache-Control', 'no-store')
+    res.json({ ok: true, shop })
+  } catch (e) {
+    res.status(500).json({ ok: false, error: '读取失败' })
+  }
+})
+
+app.post('/api/food/:id/like', authUser, async (req, res) => {
+  try {
+    const id = String(req.params.id)
+    const r = await db.toggleShopLike(id, req.user.oid)
+    const shop = await db.getShopDetail(id, req.user.oid)
+    res.json({
+      ok: true,
+      liked: r.liked,
+      likes: shop ? shop.likes : 0,
+      comments: shop ? shop.comments : 0,
+      score: shop ? shop.score : 0
+    })
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
+
+app.post('/api/food/:id/comment', authUser, async (req, res) => {
+  try {
+    const id = String(req.params.id)
+    const content = String((req.body && req.body.content) || '').trim()
+    const score = Math.min(5, Math.max(1, Number(req.body && req.body.score) || 5))
+
+    if (!content) return res.status(400).json({ ok: false, error: '评论不能为空' })
+    if (content.length > 200) return res.status(400).json({ ok: false, error: '评论别超过 200 字' })
+
+    const user = await db.getUser(req.user.oid)
+    const comment = await db.addShopComment(id, req.user.oid, (user && user.nick) || '', content, score)
+    const shop = await db.getShopDetail(id, req.user.oid)
+
+    res.json({
+      ok: true,
+      comment,
+      score: shop ? shop.score : score,
+      comments: shop ? shop.comments : 0
+    })
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
+
 // ---------- 管理端 ----------
 
 app.post('/api/admin/login', async (req, res) => {
@@ -309,6 +383,8 @@ async function main() {
   try {
     const r = await db.init(seed)
     console.log('[db] ready', JSON.stringify(r))
+    const f = await db.seedShops(foodSeed)
+    console.log('[db] food', JSON.stringify(f))
   } catch (e) {
     console.error('[db] init failed:', e.message)
   }

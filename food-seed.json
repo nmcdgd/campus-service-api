@@ -1,0 +1,167 @@
+{
+  "shops": [
+    {
+      "id": "bbq-backgate",
+      "name": "后门烧烤摊",
+      "place": "学校后门",
+      "desc": "晚上九点出摊，烤鸡翅和烤茄子必点，老板会给撒辣椒面。",
+      "tags": "烧烤,夜宵",
+      "baseLikes": 186,
+      "baseScore": 4.9,
+      "baseComments": 41
+    },
+    {
+      "id": "luosifen",
+      "name": "西霞坊螺蛳粉",
+      "place": "西霞坊",
+      "desc": "加臭加辣都能说，酸笋管够，汤底是真的螺蛳熬的。",
+      "tags": "粉面,螺蛳粉",
+      "baseLikes": 143,
+      "baseScore": 4.8,
+      "baseComments": 34
+    },
+    {
+      "id": "mixue",
+      "name": "蜜雪冰城",
+      "place": "商业中心 F1",
+      "desc": "柠檬水四块，夏天晚上排队能排到门口。",
+      "tags": "饮品,平价",
+      "baseLikes": 156,
+      "baseScore": 4.5,
+      "baseComments": 31
+    },
+    {
+      "id": "jigongbao",
+      "name": "商业中心鸡公煲",
+      "place": "商业中心 F2",
+      "desc": "两人份一锅，加菜便宜，聚餐首选。",
+      "tags": "火锅,聚餐",
+      "baseLikes": 112,
+      "baseScore": 4.2,
+      "baseComments": 26
+    },
+    {
+      "id": "malatang",
+      "name": "一饭麻辣烫",
+      "place": "第一食堂 二楼",
+      "desc": "自选菜品，汤底有麻辣、番茄、菌汤三种，称重算钱。",
+      "tags": "麻辣烫,自选",
+      "baseLikes": 128,
+      "baseScore": 4.6,
+      "baseComments": 23
+    },
+    {
+      "id": "shaola",
+      "name": "一饭广式烧腊",
+      "place": "第一食堂 一楼",
+      "desc": "烧鸭饭、叉烧饭，加饭不加钱，中午去晚了只剩鸡腿。",
+      "tags": "烧腊,快餐",
+      "baseLikes": 96,
+      "baseScore": 4.4,
+      "baseComments": 18
+    },
+    {
+      "id": "baozaifan",
+      "name": "北宸坊煲仔饭",
+      "place": "北宸坊",
+      "desc": "腊味煲仔饭的锅巴很脆，要等十分钟，急不来。",
+      "tags": "粤菜,煲仔饭",
+      "baseLikes": 91,
+      "baseScore": 4.4,
+      "baseComments": 17
+    },
+    {
+      "id": "tangshui",
+      "name": "二饭糖水铺",
+      "place": "第二食堂 一楼",
+      "desc": "红豆沙、绿豆爽、双皮奶，晚上七点后打八折。",
+      "tags": "甜品,夜宵",
+      "baseLikes": 87,
+      "baseScore": 4.7,
+      "baseComments": 15
+    },
+    {
+      "id": "lanzhou",
+      "name": "二饭兰州拉面",
+      "place": "第二食堂 二楼",
+      "desc": "手工拉面，牛肉给得实在，汤偏咸。",
+      "tags": "面食,拉面",
+      "baseLikes": 74,
+      "baseScore": 4.3,
+      "baseComments": 12
+    },
+    {
+      "id": "shuiguolao",
+      "name": "生活服务区水果捞",
+      "place": "生活服务区",
+      "desc": "现切水果，酸奶自己加，称重卖。",
+      "tags": "水果,甜品",
+      "baseLikes": 77,
+      "baseScore": 4.6,
+      "baseComments": 14
+    },
+    {
+      "id": "baozipu",
+      "name": "一饭早餐包子铺",
+      "place": "第一食堂 一楼",
+      "desc": "六点半开卖，豆浆免费续，早八前最挤。",
+      "tags": "早餐,包子",
+      "baseLikes": 103,
+      "baseScore": 4.5,
+      "baseComments": 20
+    },
+    {
+      "id": "chongqingxiaomian",
+      "name": "重庆小面",
+      "place": "商业中心 F1",
+      "desc": "豌杂面加个蛋十二块管饱，辣度可以选。",
+      "tags": "面食,川味",
+      "baseLikes": 85,
+      "baseScore": 4.3,
+      "baseComments": 13
+    },
+    {
+      "id": "tiebanshao",
+      "name": "二饭铁板烧",
+      "place": "第二食堂 二楼",
+      "desc": "现炒铁板饭，油烟大但香，一份吃很饱。",
+      "tags": "铁板,快餐",
+      "baseLikes": 66,
+      "baseScore": 4.2,
+      "baseComments": 10
+    },
+    {
+      "id": "shaxian",
+      "name": "东旭坊沙县小吃",
+      "place": "东旭坊",
+      "desc": "拌面扁肉，赶时间首选，十块出头搞定一顿。",
+      "tags": "快餐,平价",
+      "baseLikes": 68,
+      "baseScore": 4.0,
+      "baseComments": 9
+    },
+    {
+      "id": "coffee",
+      "name": "学活咖啡角",
+      "place": "学生活动中心 一楼",
+      "desc": "美式八块，插座多，适合带电脑坐一下午。",
+      "tags": "咖啡,自习",
+      "baseLikes": 59,
+      "baseScore": 4.1,
+      "baseComments": 8
+    }
+  ],
+  "comments": [
+    { "shopId": "bbq-backgate", "nick": "夜跑的鱼", "score": 5, "content": "鸡翅腌得入味，撒的辣椒面是真的辣，配冰豆奶刚好。" },
+    { "shopId": "bbq-backgate", "nick": "住在西霞", "score": 5, "content": "九点半去人最多，想快点可以十点后再去，但茄子可能卖完。" },
+    { "shopId": "bbq-backgate", "nick": "阿哲", "score": 4, "content": "好吃是好吃，就是吃完身上一股味，回宿舍得先洗澡。" },
+    { "shopId": "luosifen", "nick": "酸笋爱好者", "score": 5, "content": "跟老板说加臭，他真的给加，整个西霞坊都闻得到。" },
+    { "shopId": "luosifen", "nick": "小陈", "score": 4, "content": "汤头比外面连锁店浓，粉稍微软了点，可以让老板少煮一会。" },
+    { "shopId": "mixue", "nick": "柠檬水续命", "score": 5, "content": "四块钱一大杯，夏天靠它活着。晚上八点后要排二十分钟。" },
+    { "shopId": "jigongbao", "nick": "宿舍聚餐组", "score": 4, "content": "四个人点两锅刚好，人均三十出头，比外面火锅划算。" },
+    { "shopId": "malatang", "nick": "一饭常客", "score": 5, "content": "番茄汤底比其他两家浓，菜品也新鲜，就是称重有点压秤。" },
+    { "shopId": "shaola", "nick": "广东胃", "score": 4, "content": "烧鸭皮脆，酱汁偏甜。中午十二点去基本只剩鸡腿饭了。" },
+    { "shopId": "tangshui", "nick": "甜品脑袋", "score": 5, "content": "双皮奶晚上打折，六块一份，比奶茶店实在多了。" },
+    { "shopId": "baozaifan", "nick": "北区住户", "score": 4, "content": "锅巴是真的脆，但要等，赶下一节课就别点了。" }
+  ]
+}

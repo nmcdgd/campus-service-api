@@ -71,6 +71,37 @@ const DDL = [
     status TINYINT(1) NOT NULL DEFAULT 1,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login DATETIME NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+  `CREATE TABLE IF NOT EXISTS shops (
+    id VARCHAR(64) NOT NULL PRIMARY KEY,
+    name VARCHAR(64) NOT NULL,
+    place VARCHAR(128) NOT NULL DEFAULT '',
+    desc_text VARCHAR(255) NOT NULL DEFAULT '',
+    tags VARCHAR(128) NOT NULL DEFAULT '',
+    base_likes INT NOT NULL DEFAULT 0,
+    base_score DECIMAL(3,1) NOT NULL DEFAULT 4.0,
+    base_comments INT NOT NULL DEFAULT 0,
+    sort INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+  `CREATE TABLE IF NOT EXISTS shop_likes (
+    shop_id VARCHAR(64) NOT NULL,
+    openid VARCHAR(64) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (shop_id, openid)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+  `CREATE TABLE IF NOT EXISTS shop_comments (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    shop_id VARCHAR(64) NOT NULL,
+    openid VARCHAR(64) NOT NULL DEFAULT '',
+    nick VARCHAR(64) NOT NULL DEFAULT '',
+    content VARCHAR(500) NOT NULL,
+    score TINYINT NOT NULL DEFAULT 5,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_shop (shop_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 ]
 
@@ -225,7 +256,8 @@ async function init(seed) {
   const db = getPool()
   for (const sql of DDL) await db.query(sql)
 
-  return seedIfEmpty(seed)
+  const seeded = await seedIfEmpty(seed)
+  return seeded
 }
 
 // ---------- 用户 ----------
@@ -280,6 +312,155 @@ async function setUserStatus(openid, status) {
   return res.affectedRows > 0
 }
 
+// ---------- 美食榜 ----------
+
+const SHOP_SELECT = `
+  SELECT s.*,
+    (SELECT COUNT(*) FROM shop_likes l WHERE l.shop_id = s.id) AS real_likes,
+    (SELECT COUNT(*) FROM shop_comments c WHERE c.shop_id = s.id) AS real_comments,
+    (SELECT AVG(c.score) FROM shop_comments c WHERE c.shop_id = s.id) AS real_avg
+  FROM shops s
+`
+
+function shapeShop(r, openid, likedSet) {
+  const realLikes = Number(r.real_likes) || 0
+  const realComments = Number(r.real_comments) || 0
+  const realAvg = r.real_avg === null || r.real_avg === undefined ? null : Number(r.real_avg)
+
+  const totalComments = Number(r.base_comments || 0) + realComments
+  let score = Number(r.base_score || 0)
+  if (realAvg !== null && realComments > 0) {
+    score = (Number(r.base_score || 0) * Number(r.base_comments || 0) + realAvg * realComments) / totalComments
+  }
+  score = Math.round(score * 10) / 10
+
+  return {
+    id: r.id,
+    name: r.name,
+    place: r.place,
+    desc: r.desc_text,
+    tags: String(r.tags || '').split(',').filter(Boolean),
+    likes: Number(r.base_likes || 0) + realLikes,
+    comments: totalComments,
+    score,
+    liked: likedSet ? likedSet.has(r.id) : false
+  }
+}
+
+async function listShops(openid) {
+  const db = getPool()
+  const [rows] = await db.query(SHOP_SELECT)
+  let likedSet = new Set()
+  if (openid) {
+    const [ls] = await db.query('SELECT shop_id FROM shop_likes WHERE openid = ?', [openid])
+    likedSet = new Set(ls.map((x) => x.shop_id))
+  }
+  return rows
+    .map((r) => shapeShop(r, openid, likedSet))
+    .sort((a, b) => b.likes - a.likes || b.score - a.score)
+}
+
+function shapeComment(r) {
+  return {
+    id: r.id,
+    nick: r.nick || '匿名同学',
+    content: r.content,
+    score: Number(r.score) || 5,
+    at: r.created_at
+  }
+}
+
+async function getShopDetail(id, openid) {
+  const db = getPool()
+  const [rows] = await db.query(SHOP_SELECT + ' WHERE s.id = ? LIMIT 1', [id])
+  if (!rows[0]) return null
+
+  let liked = false
+  if (openid) {
+    const [ls] = await db.query('SELECT 1 FROM shop_likes WHERE shop_id = ? AND openid = ? LIMIT 1', [id, openid])
+    liked = ls.length > 0
+  }
+
+  const [cs] = await db.query(
+    'SELECT * FROM shop_comments WHERE shop_id = ? ORDER BY id DESC LIMIT 100',
+    [id]
+  )
+
+  const shop = shapeShop(rows[0], openid, null)
+  shop.liked = liked
+  shop.commentList = cs.map(shapeComment)
+  return shop
+}
+
+async function toggleShopLike(shopId, openid) {
+  const db = getPool()
+  const [exist] = await db.query(
+    'SELECT 1 FROM shop_likes WHERE shop_id = ? AND openid = ? LIMIT 1',
+    [shopId, openid]
+  )
+  if (exist.length) {
+    await db.query('DELETE FROM shop_likes WHERE shop_id = ? AND openid = ?', [shopId, openid])
+    return { liked: false }
+  }
+  await db.query('INSERT INTO shop_likes (shop_id, openid) VALUES (?, ?)', [shopId, openid])
+  return { liked: true }
+}
+
+async function addShopComment(shopId, openid, nick, content, score) {
+  const db = getPool()
+  const [res] = await db.query(
+    'INSERT INTO shop_comments (shop_id, openid, nick, content, score) VALUES (?, ?, ?, ?, ?)',
+    [shopId, openid, String(nick || '').slice(0, 64), String(content).slice(0, 500), score]
+  )
+  const [rows] = await db.query('SELECT * FROM shop_comments WHERE id = ?', [res.insertId])
+  return rows[0] ? shapeComment(rows[0]) : null
+}
+
+async function seedShops(foodSeed) {
+  const db = getPool()
+  const [rows] = await db.query('SELECT COUNT(*) AS n FROM shops')
+  const count = rows[0] ? rows[0].n : 0
+  if (count > 0) return { seeded: false, count }
+
+  const list = (foodSeed && foodSeed.shops) || []
+  if (!list.length) return { seeded: false, count }
+
+  const values = list.map((s, i) => [
+    s.id,
+    s.name,
+    s.place || '',
+    s.desc || '',
+    s.tags || '',
+    Number(s.baseLikes) || 0,
+    Number(s.baseScore) || 4,
+    Number(s.baseComments) || 0,
+    list.length - i
+  ])
+
+  await db.query(
+    `INSERT INTO shops (id, name, place, desc_text, tags, base_likes, base_score, base_comments, sort)
+     VALUES ?`,
+    [values]
+  )
+
+  const comments = (foodSeed && foodSeed.comments) || []
+  if (comments.length) {
+    const cv = comments.map((c) => [
+      c.shopId,
+      '',
+      c.nick || '匿名同学',
+      c.content,
+      Number(c.score) || 5
+    ])
+    await db.query(
+      'INSERT INTO shop_comments (shop_id, openid, nick, content, score) VALUES ?',
+      [cv]
+    )
+  }
+
+  return { seeded: true, count: values.length, comments: comments.length }
+}
+
 module.exports = {
   init,
   getPool,
@@ -293,5 +474,10 @@ module.exports = {
   upsertUser,
   getUser,
   listUsers,
-  setUserStatus
+  setUserStatus,
+  listShops,
+  getShopDetail,
+  toggleShopLike,
+  addShopComment,
+  seedShops
 }
