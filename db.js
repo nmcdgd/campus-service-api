@@ -102,6 +102,22 @@ const DDL = [
     score TINYINT NOT NULL DEFAULT 5,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_shop (shop_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+  `CREATE TABLE IF NOT EXISTS games (
+    id VARCHAR(64) NOT NULL PRIMARY KEY,
+    title VARCHAR(128) NOT NULL,
+    game VARCHAR(64) NOT NULL DEFAULT '',
+    organizer VARCHAR(128) NOT NULL DEFAULT '',
+    dept VARCHAR(128) NOT NULL DEFAULT '',
+    signup_url VARCHAR(512) NOT NULL DEFAULT '',
+    deadline VARCHAR(64) NOT NULL DEFAULT '',
+    start_at VARCHAR(64) NOT NULL DEFAULT '',
+    place VARCHAR(128) NOT NULL DEFAULT '',
+    prize VARCHAR(128) NOT NULL DEFAULT '',
+    status VARCHAR(32) NOT NULL DEFAULT 'signup',
+    desc_text VARCHAR(500) NOT NULL DEFAULT '',
+    sort INT NOT NULL DEFAULT 0
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 ]
 
@@ -461,6 +477,73 @@ async function seedShops(foodSeed) {
   return { seeded: true, count: values.length, comments: comments.length }
 }
 
+// ---------- 游戏榜 ----------
+
+const STATUS_ORDER = { signup: 0, ongoing: 1, ended: 2 }
+
+function shapeGame(r) {
+  return {
+    id: r.id,
+    title: r.title,
+    game: r.game,
+    organizer: r.organizer,
+    dept: r.dept,
+    signupUrl: r.signup_url,
+    deadline: r.deadline,
+    startAt: r.start_at,
+    place: r.place,
+    prize: r.prize,
+    status: r.status,
+    desc: r.desc_text
+  }
+}
+
+async function listGames() {
+  const db = getPool()
+  const [rows] = await db.query('SELECT * FROM games')
+  return rows
+    .map(shapeGame)
+    .sort((a, b) => {
+      const sa = STATUS_ORDER[a.status] === undefined ? 9 : STATUS_ORDER[a.status]
+      const sb = STATUS_ORDER[b.status] === undefined ? 9 : STATUS_ORDER[b.status]
+      return sa - sb
+    })
+}
+
+async function seedGames(gameSeed) {
+  const db = getPool()
+  const [rows] = await db.query('SELECT COUNT(*) AS n FROM games')
+  const count = rows[0] ? rows[0].n : 0
+  if (count > 0) return { seeded: false, count }
+
+  const list = (gameSeed && gameSeed.games) || []
+  if (!list.length) return { seeded: false, count }
+
+  const values = list.map((g) => [
+    g.id,
+    g.title,
+    g.game || '',
+    g.organizer || '',
+    g.dept || '',
+    g.signupUrl || '',
+    g.deadline || '',
+    g.startAt || '',
+    g.place || '',
+    g.prize || '',
+    g.status || 'signup',
+    g.desc || '',
+    Number(g.sort) || 0
+  ])
+
+  await db.query(
+    `INSERT INTO games (id, title, game, organizer, dept, signup_url, deadline, start_at, place, prize, status, desc_text, sort)
+     VALUES ?`,
+    [values]
+  )
+
+  return { seeded: true, count: values.length }
+}
+
 module.exports = {
   init,
   getPool,
@@ -479,5 +562,7 @@ module.exports = {
   getShopDetail,
   toggleShopLike,
   addShopComment,
-  seedShops
+  seedShops,
+  listGames,
+  seedGames
 }

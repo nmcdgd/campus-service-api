@@ -9,6 +9,7 @@ const express = require('express')
 const db = require('./db')
 const seed = require('./seed.json')
 const foodSeed = require('./food-seed.json')
+const gameSeed = require('./game-seed.json')
 
 const PORT = Number(process.env.PORT) || 80
 const ADMIN_USER = process.env.ADMIN_USER || 'admin'
@@ -265,6 +266,18 @@ app.post('/api/food/:id/comment', authUser, async (req, res) => {
   }
 })
 
+// ---------- 游戏榜 ----------
+
+app.get('/api/game/list', async (req, res) => {
+  try {
+    const games = await db.listGames()
+    res.set('Cache-Control', 'no-store')
+    res.json({ ok: true, games })
+  } catch (e) {
+    res.status(500).json({ ok: false, error: '读取失败' })
+  }
+})
+
 // ---------- 管理端 ----------
 
 app.post('/api/admin/login', async (req, res) => {
@@ -385,6 +398,8 @@ async function main() {
     console.log('[db] ready', JSON.stringify(r))
     const f = await db.seedShops(foodSeed)
     console.log('[db] food', JSON.stringify(f))
+    const g = await db.seedGames(gameSeed)
+    console.log('[db] games', JSON.stringify(g))
   } catch (e) {
     console.error('[db] init failed:', e.message)
   }
