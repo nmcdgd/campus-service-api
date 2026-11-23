@@ -1,0 +1,232 @@
+/**
+ * 数据库层：连接云托管 MySQL、建库建表、种入初始数据
+ * 环境变量由微信云托管自动注入：
+ *   MYSQL_ADDRESS、MYSQL_USERNAME、MYSQL_PASSWORD
+ */
+const mysql = require('mysql2/promise')
+
+const DB_NAME = process.env.MYSQL_DATABASE || 'campus'
+
+let pool = null
+
+function mysqlAddr() {
+  const raw = String(process.env.MYSQL_ADDRESS || '').trim()
+  const [host, port] = raw.split(':')
+  return { host: host || '127.0.0.1', port: Number(port) || 3306 }
+}
+
+function baseConfig() {
+  const { host, port } = mysqlAddr()
+  return {
+    host,
+    port,
+    user: process.env.MYSQL_USERNAME || 'root',
+    password: process.env.MYSQL_PASSWORD || '',
+    charset: 'utf8mb4'
+  }
+}
+
+function getPool() {
+  if (pool) return pool
+  pool = mysql.createPool({
+    ...baseConfig(),
+    database: DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 4,
+    queueLimit: 0
+  })
+  return pool
+}
+
+const DDL = [
+  `CREATE TABLE IF NOT EXISTS services (
+    id VARCHAR(64) NOT NULL PRIMARY KEY,
+    name VARCHAR(128) NOT NULL,
+    cat VARCHAR(32) NOT NULL DEFAULT 'life',
+    summary VARCHAR(255) NOT NULL DEFAULT '',
+    location VARCHAR(255) NOT NULL DEFAULT '',
+    open_time VARCHAR(128) NOT NULL DEFAULT '',
+    phone VARCHAR(64) NOT NULL DEFAULT '',
+    notice TEXT,
+    materials TEXT,
+    entry_type VARCHAR(32) NOT NULL DEFAULT 'window',
+    app_id VARCHAR(64) NOT NULL DEFAULT '',
+    short_link VARCHAR(512) NOT NULL DEFAULT '',
+    oa_name VARCHAR(128) NOT NULL DEFAULT '',
+    link VARCHAR(512) NOT NULL DEFAULT '',
+    is_common TINYINT(1) NOT NULL DEFAULT 0,
+    sort INT NOT NULL DEFAULT 0,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+  `CREATE TABLE IF NOT EXISTS settings (
+    k VARCHAR(64) NOT NULL PRIMARY KEY,
+    v MEDIUMTEXT
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+]
+
+// 服务数据是整包替换的，启动时如果表空就灌种子
+async function seedIfEmpty(seed) {
+  const db = getPool()
+  const [rows] = await db.query('SELECT COUNT(*) AS n FROM services')
+  const count = rows[0] ? rows[0].n : 0
+  if (count > 0) return { seeded: false, count }
+
+  if (!seed || !Array.isArray(seed.services) || !seed.services.length) {
+    return { seeded: false, count }
+  }
+
+  const values = seed.services.map(toRow)
+  const sql = `INSERT INTO services
+    (id, name, cat, summary, location, open_time, phone, notice, materials,
+     entry_type, app_id, short_link, oa_name, link, is_common, sort)
+    VALUES ?`
+  await db.query(sql, [values])
+
+  await setSetting('version', String(seed.version || 1))
+  await setSetting('notice', String(seed.notice || ''))
+
+  return { seeded: true, count: values.length }
+}
+
+function toRow(s) {
+  return [
+    String(s.id || '').slice(0, 64),
+    String(s.name || '').slice(0, 128),
+    String(s.cat || 'life').slice(0, 32),
+    String(s.summary || '').slice(0, 255),
+    String(s.location || '').slice(0, 255),
+    String(s.openTime || '').slice(0, 128),
+    String(s.phone || '').slice(0, 64),
+    String(s.notice || ''),
+    JSON.stringify(Array.isArray(s.materials) ? s.materials : []),
+    String(s.entryType || 'window').slice(0, 32),
+    String(s.appId || '').slice(0, 64),
+    String(s.shortLink || '').slice(0, 512),
+    String(s.oaName || '').slice(0, 128),
+    String(s.link || '').slice(0, 512),
+    s.isCommon ? 1 : 0,
+    Number(s.sort) || 0
+  ]
+}
+
+function fromRow(r) {
+  let materials = []
+  try {
+    materials = JSON.parse(r.materials || '[]')
+  } catch (e) {
+    materials = []
+  }
+  if (!Array.isArray(materials)) materials = []
+
+  return {
+    id: r.id,
+    name: r.name,
+    cat: r.cat,
+    summary: r.summary,
+    location: r.location,
+    openTime: r.open_time,
+    phone: r.phone,
+    notice: r.notice || '',
+    materials,
+    entryType: r.entry_type,
+    appId: r.app_id,
+    shortLink: r.short_link,
+    oaName: r.oa_name,
+    link: r.link,
+    isCommon: !!r.is_common,
+    sort: r.sort
+  }
+}
+
+async function getSetting(k, fallback = '') {
+  const db = getPool()
+  const [rows] = await db.query('SELECT v FROM settings WHERE k = ? LIMIT 1', [k])
+  return rows[0] ? rows[0].v : fallback
+}
+
+async function setSetting(k, v) {
+  const db = getPool()
+  await db.query(
+    'INSERT INTO settings (k, v) VALUES (?, ?) ON DUPLICATE KEY UPDATE v = VALUES(v)',
+    [k, String(v ?? '')]
+  )
+}
+
+async function bumpVersion() {
+  const cur = Number(await getSetting('version', '0')) || 0
+  const next = cur + 1
+  await setSetting('version', String(next))
+  return next
+}
+
+async function listServices() {
+  const db = getPool()
+  const [rows] = await db.query('SELECT * FROM services ORDER BY sort DESC, id ASC')
+  return rows.map(fromRow)
+}
+
+async function upsertService(s) {
+  const db = getPool()
+  const row = toRow(s)
+  await db.query(
+    `INSERT INTO services
+      (id, name, cat, summary, location, open_time, phone, notice, materials,
+       entry_type, app_id, short_link, oa_name, link, is_common, sort)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ON DUPLICATE KEY UPDATE
+       name=VALUES(name), cat=VALUES(cat), summary=VALUES(summary),
+       location=VALUES(location), open_time=VALUES(open_time), phone=VALUES(phone),
+       notice=VALUES(notice), materials=VALUES(materials),
+       entry_type=VALUES(entry_type), app_id=VALUES(app_id),
+       short_link=VALUES(short_link), oa_name=VALUES(oa_name), link=VALUES(link),
+       is_common=VALUES(is_common), sort=VALUES(sort), updated_at=NOW()`,
+    row
+  )
+  return fromRow({ ...toRowObj(s), updated_at: new Date() })
+}
+
+function toRowObj(s) {
+  const r = toRow(s)
+  return {
+    id: r[0], name: r[1], cat: r[2], summary: r[3], location: r[4],
+    open_time: r[5], phone: r[6], notice: r[7], materials: r[8],
+    entry_type: r[9], app_id: r[10], short_link: r[11], oa_name: r[12],
+    link: r[13], is_common: r[14], sort: r[15]
+  }
+}
+
+async function deleteService(id) {
+  const db = getPool()
+  const [res] = await db.query('DELETE FROM services WHERE id = ?', [id])
+  return res.affectedRows > 0
+}
+
+async function init(seed) {
+  const cfg = baseConfig()
+  const conn = await mysql.createConnection(cfg)
+  try {
+    await conn.query(
+      `CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci`
+    )
+  } finally {
+    await conn.end()
+  }
+
+  const db = getPool()
+  for (const sql of DDL) await db.query(sql)
+
+  return seedIfEmpty(seed)
+}
+
+module.exports = {
+  init,
+  getPool,
+  listServices,
+  upsertService,
+  deleteService,
+  getSetting,
+  setSetting,
+  bumpVersion,
+  fromRow
+}

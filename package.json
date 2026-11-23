@@ -1,0 +1,17 @@
+{
+  "name": "campus-service-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "校园服务台 · 云托管后端（服务条目 + 公告 + 管理后台）",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "mysql2": "^3.11.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

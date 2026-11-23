@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>校园服务台 · 管理后台</title>
+<style>
+  :root {
+    --line: #DCE9F5;
+    --line-soft: #EDF4FA;
+    --line-strong: #C3DBEE;
+    --blue: #4A90C2;
+    --blue-deep: #2E6E9E;
+    --blue-soft: #F3F9FD;
+    --t1: #1F2A33;
+    --t2: #6B7B88;
+    --t3: #A3B2BE;
+    --danger: #C0533F;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #F7FAFC;
+    color: var(--t1);
+    font: 14px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .hidden { display: none !important; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 64px; }
+
+  /* 登录 */
+  .login-box {
+    max-width: 360px; margin: 14vh auto 0; background: #fff;
+    border: 1px solid var(--line); border-radius: 14px; padding: 28px 26px;
+  }
+  .login-box h1 { font-size: 20px; margin: 0 0 4px; }
+  .login-box p { color: var(--t3); font-size: 12px; margin: 0 0 22px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; color: var(--t3); margin-bottom: 6px; }
+  input, select, textarea {
+    width: 100%; padding: 9px 11px; font: inherit; color: var(--t1);
+    background: #fff; border: 1px solid var(--line); border-radius: 8px; outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--blue); }
+  textarea { resize: vertical; min-height: 76px; }
+  button {
+    font: inherit; cursor: pointer; border-radius: 8px; padding: 9px 16px;
+    border: 1px solid var(--line-strong); background: #fff; color: var(--blue-deep);
+  }
+  button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  button.danger { color: var(--danger); border-color: #E7C4BC; }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  .block { width: 100%; }
+
+  /* 顶部栏 */
+  .topbar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    background: #fff; border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 18px; margin-bottom: 16px;
+  }
+  .topbar h1 { font-size: 17px; margin: 0; }
+  .badge { font-size: 12px; color: var(--blue-deep); background: var(--blue-soft);
+    border: 1px solid var(--line-strong); border-radius: 999px; padding: 1px 9px; }
+  .grow { flex: 1; }
+
+  .panel {
+    background: #fff; border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px 18px; margin-bottom: 16px;
+  }
+  .panel h2 { font-size: 14px; margin: 0 0 10px; letter-spacing: .5px; }
+  .panel h2::before {
+    content: ''; display: inline-block; width: 3px; height: 13px; background: var(--blue);
+    margin-right: 8px; vertical-align: -2px;
+  }
+
+  /* 表格 */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line-soft); }
+  th { color: var(--t3); font-weight: 500; font-size: 12px; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  td.name { font-weight: 600; }
+  td .sub { color: var(--t3); font-size: 12px; font-weight: 400; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px;
+    border: 1px solid var(--line-strong); color: var(--blue-deep); }
+  .ops { white-space: nowrap; }
+  .ops button { padding: 4px 10px; font-size: 12px; margin-right: 6px; }
+
+  /* 弹窗 */
+  .mask {
+    position: fixed; inset: 0; background: rgba(20, 32, 42, .38);
+    display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow: auto;
+  }
+  .dialog {
+    width: 100%; max-width: 620px; background: #fff; border-radius: 14px; padding: 22px 24px;
+  }
+  .dialog h3 { margin: 0 0 18px; font-size: 16px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  .dialog-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .hint { color: var(--t3); font-size: 12px; margin-top: 4px; }
+  .toast {
+    position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%);
+    background: #1F2A33; color: #fff; padding: 9px 18px; border-radius: 999px;
+    font-size: 13px; opacity: 0; transition: opacity .18s; pointer-events: none;
+  }
+  .toast.show { opacity: .94; }
+  @media (max-width: 560px) {
+    .grid2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 登录 -->
+<div id="loginView">
+  <div class="login-box">
+    <h1>校园服务台 · 后台</h1>
+    <p>管理服务条目与公告，改完小程序立即生效</p>
+    <div class="field">
+      <label>账号</label>
+      <input id="u" autocomplete="username" value="admin" />
+    </div>
+    <div class="field">
+      <label>密码</label>
+      <input id="p" type="password" autocomplete="current-password" />
+    </div>
+    <button id="loginBtn" class="primary block">登录</button>
+    <div class="hint" id="loginHint"></div>
+  </div>
+</div>
+
+<!-- 主界面 -->
+<div id="mainView" class="hidden">
+  <div class="wrap">
+
+    <div class="topbar">
+      <h1>校园服务台 · 后台</h1>
+      <span class="badge" id="versionBadge">v1</span>
+      <div class="grow"></div>
+      <button id="exportBtn">导出 services.js</button>
+      <button id="logoutBtn">退出</button>
+    </div>
+
+    <div class="panel">
+      <h2>首页公告</h2>
+      <textarea id="noticeInput" placeholder="留空则不显示。建议一句话，比如：本周六热水检修，8:00-12:00 停供。"></textarea>
+      <div style="margin-top:10px">
+        <button id="noticeBtn" class="primary">保存公告</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div style="display:flex;align-items:center;margin-bottom:12px">
+        <h2 style="margin:0">服务条目 <span class="badge" id="countBadge">0</span></h2>
+        <div class="grow"></div>
+        <button id="addBtn" class="primary">新增服务</button>
+      </div>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>名称</th><th>分类</th><th>入口类型</th><th>排序</th><th>常用</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="hint" style="text-align:center">
+      所有改动保存后自动生效，小程序下次打开即拉到最新数据。收藏靠 id，改 id 会让老收藏失效。
+    </div>
+  </div>
+</div>
+
+<!-- 编辑弹窗 -->
+<div id="modal" class="mask hidden">
+  <div class="dialog">
+    <h3 id="modalTitle">编辑服务</h3>
+    <div class="grid2">
+      <div class="field"><label>id（唯一，别随便改）</label><input id="f_id" /></div>
+      <div class="field"><label>名称 *</label><input id="f_name" /></div>
+      <div class="field"><label>分类</label>
+        <select id="f_cat">
+          <option value="life">生活服务</option>
+          <option value="traffic">交通出行</option>
+          <option value="study">教务学习</option>
+          <option value="official">官方账号</option>
+          <option value="hall">办事大厅</option>
+        </select>
+      </div>
+      <div class="field"><label>入口类型</label>
+        <select id="f_entryType">
+          <option value="miniprogram">小程序</option>
+          <option value="official_account">公众号</option>
+          <option value="link">外部链接</option>
+          <option value="window">线下窗口</option>
+        </select>
+      </div>
+      <div class="field"><label>排序（越大越靠前）</label><input id="f_sort" type="number" /></div>
+      <div class="field"><label>进首页常用</label>
+        <select id="f_isCommon"><option value="0">否</option><option value="1">是</option></select>
+      </div>
+    </div>
+    <div class="field"><label>一句话说明</label><input id="f_summary" /></div>
+    <div class="grid2">
+      <div class="field"><label>服务地点</label><input id="f_location" /></div>
+      <div class="field"><label>开放时间</label><input id="f_openTime" /></div>
+    </div>
+    <div class="field"><label>办理须知（详情页正文）</label><textarea id="f_notice"></textarea></div>
+    <div class="field"><label>需要带的材料（逗号分隔）</label><input id="f_materials" /></div>
+    <div class="grid2">
+      <div class="field"><label>联系电话</label><input id="f_phone" /></div>
+      <div class="field"><label>公众号全名</label><input id="f_oaName" /></div>
+    </div>
+    <div class="field"><label>小程序 AppID（可选）</label><input id="f_appId" /></div>
+    <div class="field"><label>小程序链接 shortLink</label><input id="f_shortLink" placeholder="#小程序://XXX/abcDEF" /></div>
+    <div class="field"><label>外部链接 link</label><input id="f_link" /></div>
+    <div class="dialog-foot">
+      <button id="cancelBtn">取消</button>
+      <button id="saveBtn" class="primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+(function () {
+  var TOKEN_KEY = 'campus_admin_token';
+  var state = { token: '', services: [], version: 1, editing: null };
+
+  function $(id) { return document.getElementById(id); }
+
+  function toast(msg) {
+    var el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(function () { el.classList.remove('show'); }, 1900);
+  }
+
+  function api(path, opts) {
+    opts = opts || {};
+    var headers = { 'content-type': 'application/json' };
+    if (state.token) headers.authorization = 'Bearer ' + state.token;
+    return fetch(path, {
+      method: opts.method || 'GET',
+      headers: headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined
+    }).then(function (res) {
+      return res.json().catch(function () { return { ok: false, error: '返回格式异常' }; })
+        .then(function (data) {
+          if (res.status === 401) {
+            logout();
+            throw new Error(data.error || '登录过期');
+          }
+          if (!data.ok) throw new Error(data.error || ('请求失败 ' + res.status));
+          return data;
+        });
+    });
+  }
+
+  function showLogin() {
+    $('loginView').classList.remove('hidden');
+    $('mainView').classList.add('hidden');
+  }
+
+  function showMain() {
+    $('loginView').classList.add('hidden');
+    $('mainView').classList.remove('hidden');
+  }
+
+  function logout() {
+    state.token = '';
+    localStorage.removeItem(TOKEN_KEY);
+    showLogin();
+  }
+
+  function login() {
+    var u = $('u').value.trim();
+    var p = $('p').value;
+    if (!u || !p) { $('loginHint').textContent = '账号和密码都填一下'; return; }
+    $('loginBtn').disabled = true;
+    $('loginHint').textContent = '登录中…';
+    api('/api/admin/login', { method: 'POST', body: { username: u, password: p } })
+      .then(function (d) {
+        state.token = d.token;
+        localStorage.setItem(TOKEN_KEY, d.token);
+        $('loginHint').textContent = '';
+        showMain();
+        load();
+      })
+      .catch(function (e) { $('loginHint').textContent = e.message; })
+      .then(function () { $('loginBtn').disabled = false; });
+  }
+
+  function load() {
+    return api('/api/admin/overview').then(function (d) {
+      state.services = d.services || [];
+      state.version = d.version || 1;
+      $('versionBadge').textContent = 'v' + state.version;
+      $('countBadge').textContent = state.services.length;
+      $('noticeInput').value = d.notice || '';
+      renderTable();
+    }).catch(function (e) { toast(e.message); });
+  }
+
+  function renderTable() {
+    var tb = $('tbody');
+    tb.innerHTML = '';
+    var list = state.services.slice().sort(function (a, b) {
+      return (b.sort || 0) - (a.sort || 0);
+    });
+    list.forEach(function (s) {
+      var tr = document.createElement('tr');
+
+      var td1 = document.createElement('td');
+      td1.className = 'name';
+      td1.textContent = s.name;
+      var sub = document.createElement('div');
+      sub.className = 'sub';
+      sub.textContent = s.id + ' · ' + (s.summary || '');
+      td1.appendChild(sub);
+
+      var td2 = document.createElement('td');
+      td2.innerHTML = '<span class="tag"></span>';
+      td2.querySelector('.tag').textContent = catName(s.cat);
+
+      var td3 = document.createElement('td');
+      td3.textContent = entryName(s.entryType);
+
+      var td4 = document.createElement('td');
+      td4.textContent = String(s.sort || 0);
+
+      var td5 = document.createElement('td');
+      td5.textContent = s.isCommon ? '是' : '—';
+
+      var td6 = document.createElement('td');
+      td6.className = 'ops';
+      var b1 = document.createElement('button');
+      b1.textContent = '编辑';
+      b1.onclick = function () { openEdit(s.id); };
+      var b2 = document.createElement('button');
+      b2.textContent = '删除';
+      b2.className = 'danger';
+      b2.onclick = function () { delService(s.id, s.name); };
+      td6.appendChild(b1);
+      td6.appendChild(b2);
+
+      [td1, td2, td3, td4, td5, td6].forEach(function (td) { tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+  }
+
+  function catName(k) {
+    return ({ life: '生活服务', traffic: '交通出行', study: '教务学习', official: '官方账号', hall: '办事大厅' })[k] || k;
+  }
+
+  function entryName(k) {
+    return ({ miniprogram: '小程序', official_account: '公众号', link: '外部链接', window: '线下窗口' })[k] || k;
+  }
+
+  function openEdit(id) {
+    var s = null;
+    if (id) s = state.services.filter(function (x) { return x.id === id; })[0];
+    state.editing = s ? s.id : null;
+
+    $('modalTitle').textContent = s ? '编辑服务' : '新增服务';
+    $('f_id').value = s ? s.id : '';
+    $('f_id').disabled = !!s;
+    $('f_name').value = s ? s.name : '';
+    $('f_cat').value = s ? s.cat : 'life';
+    $('f_entryType').value = s ? s.entryType : 'miniprogram';
+    $('f_sort').value = s ? s.sort : 50;
+    $('f_isCommon').value = s && s.isCommon ? '1' : '0';
+    $('f_summary').value = s ? (s.summary || '') : '';
+    $('f_location').value = s ? (s.location || '') : '';
+    $('f_openTime').value = s ? (s.openTime || '') : '';
+    $('f_notice').value = s ? (s.notice || '') : '';
+    $('f_materials').value = s && s.materials ? s.materials.join('，') : '';
+    $('f_phone').value = s ? (s.phone || '') : '';
+    $('f_oaName').value = s ? (s.oaName || '') : '';
+    $('f_appId').value = s ? (s.appId || '') : '';
+    $('f_shortLink').value = s ? (s.shortLink || '') : '';
+    $('f_link').value = s ? (s.link || '') : '';
+
+    $('modal').classList.remove('hidden');
+  }
+
+  function closeEdit() { $('modal').classList.add('hidden'); }
+
+  function saveService() {
+    var s = {
+      id: $('f_id').value.trim(),
+      name: $('f_name').value.trim(),
+      cat: $('f_cat').value,
+      summary: $('f_summary').value.trim(),
+      location: $('f_location').value.trim(),
+      openTime: $('f_openTime').value.trim(),
+      phone: $('f_phone').value.trim(),
+      notice: $('f_notice').value,
+      materials: $('f_materials').value.split(/[，,]/).map(function (x) { return x.trim(); }).filter(Boolean),
+      entryType: $('f_entryType').value,
+      appId: $('f_appId').value.trim(),
+      shortLink: $('f_shortLink').value.trim(),
+      oaName: $('f_oaName').value.trim(),
+      link: $('f_link').value.trim(),
+      isCommon: $('f_isCommon').value === '1',
+      sort: Number($('f_sort').value) || 0
+    };
+
+    if (!s.id || !s.name) { toast('id 和名称必填'); return; }
+
+    $('saveBtn').disabled = true;
+    api('/api/admin/service', { method: 'POST', body: { service: s } })
+      .then(function () {
+        closeEdit();
+        toast('已保存');
+        return load();
+      })
+      .catch(function (e) { toast(e.message); })
+      .then(function () { $('saveBtn').disabled = false; });
+  }
+
+  function delService(id, name) {
+    if (!confirm('确定删除「' + name + '」？删了小程序那边就没了。')) return;
+    api('/api/admin/service/' + encodeURIComponent(id), { method: 'DELETE' })
+      .then(function () { toast('已删除'); return load(); })
+      .catch(function (e) { toast(e.message); });
+  }
+
+  function saveNotice() {
+    $('noticeBtn').disabled = true;
+    api('/api/admin/notice', { method: 'POST', body: { notice: $('noticeInput').value } })
+      .then(function () { toast('公告已更新'); return load(); })
+      .catch(function (e) { toast(e.message); })
+      .then(function () { $('noticeBtn').disabled = false; });
+  }
+
+  function exportJs() {
+    if (!state.token) return;
+    fetch('/api/admin/export', { headers: { authorization: 'Bearer ' + state.token } })
+      .then(function (r) { return r.text(); })
+      .then(function (txt) {
+        var blob = new Blob([txt], { type: 'text/javascript;charset=utf-8' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'services.js';
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+      })
+      .catch(function (e) { toast(e.message); });
+  }
+
+  $('loginBtn').onclick = login;
+  $('p').addEventListener('keydown', function (e) { if (e.key === 'Enter') login(); });
+  $('logoutBtn').onclick = logout;
+  $('addBtn').onclick = function () { openEdit(null); };
+  $('cancelBtn').onclick = closeEdit;
+  $('saveBtn').onclick = saveService;
+  $('noticeBtn').onclick = saveNotice;
+  $('exportBtn').onclick = exportJs;
+  $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeEdit(); });
+
+  var saved = localStorage.getItem(TOKEN_KEY);
+  if (saved) {
+    state.token = saved;
+    api('/api/admin/overview').then(function (d) {
+      showMain();
+      state.services = d.services || [];
+      state.version = d.version || 1;
+      $('versionBadge').textContent = 'v' + state.version;
+      $('countBadge').textContent = state.services.length;
+      $('noticeInput').value = d.notice || '';
+      renderTable();
+    }).catch(function () { showLogin(); });
+  } else {
+    showLogin();
+  }
+})();
+</script>
+</body>
+</html>
